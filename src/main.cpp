@@ -19,12 +19,15 @@
 
 /* VARIABLES */
 bool uRosInitSuccesfull = false;
+volatile uint32_t actuator_pulse_count = 0;
+
 // RTOS
 QueueHandle_t SetpointQueue;
 QueueHandle_t MotorStateQueue;
 QueueHandle_t ImuQueue;
 QueueHandle_t BatteryStateQueue;
 QueueHandle_t uRosPingAgentStatusQueue;
+QueueHandle_t ActuatorFbQueue;
 portBASE_TYPE s1, s2, s3, s4, s5, s6, s7, s8, s9, s10;
 
 /* EXTERN VARIABLES */
@@ -69,6 +72,11 @@ static void RuntimeStatsTask(void * p);
 
 /* FUNCTIONS */
 
+void ActuatorISR()
+{
+    actuator_pulse_count++;
+}
+
 /*==================== SETUP ========================*/
 void setup()
 {
@@ -80,12 +88,24 @@ void setup()
   delay(150);
   SetGreenLed(Off);
 
+  pinMode(EXT_GPIO1, OUTPUT);     // DIR direction
+  pinMode(EXT_GPIO2, OUTPUT);     // EN enable
+  pinMode(EXT_GPIO3, INPUT);      // Feedback
+  pinMode(EXT_PWM1_PIN, OUTPUT);  // PWM
+
+  attachInterrupt(digitalPinToInterrupt(EXT_GPIO3), ActuatorISR, RISING);
+
+  digitalWrite(EXT_GPIO1, LOW);   // default direction
+  digitalWrite(EXT_GPIO2, HIGH);  // actuator disabled initially
+  analogWrite(EXT_PWM1_PIN, 0);   // no movement
+
   /* RTOS QUEUES CREATION */
   SetpointQueue = xQueueCreate(1, sizeof(double) * 4);
   MotorStateQueue = xQueueCreate(1, sizeof(motor_state_queue_t));
   ImuQueue = xQueueCreate(1, sizeof(imu_queue_t));
   BatteryStateQueue = xQueueCreate(1, sizeof(battery_state_queue_t));
   uRosPingAgentStatusQueue = xQueueCreate(1, sizeof(uRosFunctionStatus));
+  ActuatorFbQueue = xQueueCreate(1, sizeof(uint32_t));
   if (firmware_mode == fw_debug) Serial.printf("Queues created\r\n");
   /* RTOS TASKS CREATION */
   s1 = xTaskCreate(
@@ -271,6 +291,14 @@ static void HardwareLoopTask(void * p)
   FanHardwareInit();
   while (1) {
     FanLoopHanlder();
+
+    // actuator feedback
+    uint32_t val = actuator_pulse_count;
+
+    xQueueOverwrite(ActuatorFbQueue, &val);
+
+    Serial.printf("Queue Pulse: %lu\n", val);
+
     vTaskDelay(100);
   }
 }
