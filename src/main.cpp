@@ -72,9 +72,19 @@ static void RuntimeStatsTask(void * p);
 
 /* FUNCTIONS */
 
+volatile unsigned long lastInterruptTime = 0;
+const unsigned long TRIGGER_DELAY = 12500;  // Minimum microseconds between pulses
+
 void ActuatorISR()
 {
-    actuator_pulse_count++;
+    unsigned long currentTime = micros();  // Get current time in microseconds
+
+    // Only count pulse if sufficient time has passed since last pulse
+    if (currentTime - lastInterruptTime > TRIGGER_DELAY)
+    {
+      actuator_pulse_count++;
+      lastInterruptTime = currentTime;
+    }
 }
 
 /*==================== SETUP ========================*/
@@ -93,7 +103,7 @@ void setup()
   pinMode(EXT_GPIO3, INPUT);      // Feedback
   pinMode(EXT_PWM1_PIN, OUTPUT);  // PWM
 
-  attachInterrupt(digitalPinToInterrupt(EXT_GPIO3), ActuatorISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(EXT_GPIO3), ActuatorISR, FALLING);
 
   digitalWrite(EXT_GPIO1, LOW);   // default direction
   digitalWrite(EXT_GPIO2, HIGH);  // actuator disabled initially
