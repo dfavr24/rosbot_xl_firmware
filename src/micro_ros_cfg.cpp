@@ -58,6 +58,7 @@ uRosFunctionStatus ping_agent_status;
 // REST
 extern FirmwareModeTypeDef firmware_mode;
 extern QueueHandle_t ActuatorFbQueue;
+extern volatile uint32_t actuator_pulse_count;
 
 void ErrorLoop(const char * func)
 {
@@ -228,9 +229,14 @@ void actuatorCmdCallback(const void * msgin)
 
     if (msg->data.size >= 3)
     {
-        digitalWrite(EXT_GPIO1, msg->data.data[0] ? HIGH : LOW);
-        digitalWrite(EXT_GPIO2, msg->data.data[1] ? HIGH : LOW);
-        analogWrite(EXT_PWM1_PIN, msg->data.data[2]);
+      if (msg->data.data[0] == 0 && msg->data.data[1] == 1 && msg->data.data[2] == 0) // Reset counter if data = {0,1,0}, i.e. actuator is STOPPED
+      {
+        actuator_pulse_count = 0;
+      }
+
+      digitalWrite(EXT_GPIO1, msg->data.data[0] ? HIGH : LOW);
+      digitalWrite(EXT_GPIO2, msg->data.data[1] ? HIGH : LOW);
+      analogWrite(EXT_PWM1_PIN, msg->data.data[2]);
     }
 }
 
